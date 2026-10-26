@@ -2,7 +2,7 @@
 
 ## Ready-to-flash release
 
-Download and extract `esp32s3-lr2021-adsb-receiver-v1.0.0-firmware.zip` from
+Download and extract `esp32s3-lr2021-adsb-receiver-v1.0.1-firmware.zip` from
 [Releases](https://github.com/thefatmoop/esp32s3-lr2021-adsb-receiver/releases). Verify its SHA-256
 checksum against `SHA256SUMS.txt` if desired. Use the ESP32-S3 W12 with 16 MB
 flash; the image is not for ESP32-P4, ESP32-C5, or SX1262 boards.
@@ -24,7 +24,7 @@ before doing it.
 
 ```sh
 python -m esptool --chip esp32s3 --port PORT erase-flash
-python -m esptool --chip esp32s3 --port PORT --baud 460800 write-flash 0x0 esp32s3-lr2021-adsb-receiver-v1.0.0-factory.bin
+python -m esptool --chip esp32s3 --port PORT --baud 460800 write-flash 0x0 esp32s3-lr2021-adsb-receiver-v1.0.1-factory.bin
 ```
 
 If automatic bootloader entry fails, hold BOOT, tap RESET, release BOOT, and
@@ -38,7 +38,7 @@ preserves NVS settings. Do not erase flash or write the factory image when
 you intend to retain them.
 
 ```sh
-python -m esptool --chip esp32s3 --port PORT --baud 460800 write-flash 0x10000 esp32s3-lr2021-adsb-receiver-v1.0.0-app.bin
+python -m esptool --chip esp32s3 --port PORT --baud 460800 write-flash 0x10000 esp32s3-lr2021-adsb-receiver-v1.0.1-app.bin
 ```
 
 ## Wi-Fi provisioning

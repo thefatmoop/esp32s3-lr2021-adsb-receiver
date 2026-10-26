@@ -35,7 +35,7 @@ cc -std=c11 -Imain -Itests/stubs tests/test_stream.c main/trail_cache.c -lm -o t
 On Windows, use `.exe` output names and run the corresponding executables.
 These tests cover CRC/CPR/fields, all single-bit positions and two-bit rejection
 in a reference frame, recovery safeguards, Wi-Fi timeout policy, Beast escaping,
-and trail caching. Boot-time receiver self-tests provide an additional check.
+and compatibility with browser-only trails. Boot-time receiver self-tests provide an additional check.
 
 ## Documentation screenshots
 
@@ -60,3 +60,10 @@ python scripts/build_offline_map.py
 
 The script uses only Python's standard library and updates JSON, gzip and the
 map ETag. Natural Earth data is public domain; see [THIRD_PARTY.md](../THIRD_PARTY.md).
+
+HTTP and browser polling regression checks:
+
+```sh
+python tests/test_web_serialization.py cc
+node tests/test_connection.cjs
+```
