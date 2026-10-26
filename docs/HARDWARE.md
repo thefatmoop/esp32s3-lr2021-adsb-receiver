@@ -13,6 +13,12 @@ marking **2J1**, approximately **1.4 × 1.1 mm**. Its 902–928 MHz passband is
 unsuitable for 1090 MHz. It sits between the GC1109 receive output and the
 LR2021 LF input. The stock filter severely attenuates the desired signal.
 
+The HF / 2.4 GHz connector also works for 1090 MHz reception without removing
+U12, but showed significantly reduced range compared with the filter-bypassed
+LF path in this project's tests. Select HF in Receiver settings when using
+that connector. For the better-performing configuration, bypass U12, use LF,
+and select LF in the UI (the release default).
+
 References: [W12 schematic](https://wiki.meshnology.com/assets/files/W12-MB-V0.2%281%29-b62d4b0929d59c1a3c9ca5847eb65bf8.pdf),
 [B2625 datasheet](https://www.mouser.com/datasheet/2/842/Qualcomm_B39921B2625P810-3074496.pdf).
 The schematic file is named V0.2 while some internal sheets say V0.1.
