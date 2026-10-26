@@ -60,9 +60,7 @@ the complete details.
 
 ![Desktop aircraft map with fictional demonstration data](docs/images/webui-desktop.png)
 
-*Screenshots use fictional aircraft, a demonstration receiver position near New
-York, and a placeholder network. They do not show an actual installation's
-location or captured flight history.*
+*Screenshots show demo aircraft and a sample receiver location.*
 
 <img src="docs/images/webui-mobile.png" alt="Mobile aircraft map with fictional data" width="350">
 
@@ -137,8 +135,7 @@ credential. Wi-Fi credentials and the last GNSS fix are stored locally in NVS.
 ![Inside the enclosure](docs/images/interior.png)
 
 The **GNSS module and internal 2.4 GHz antenna are hot-glued into place** in
-the pictured build. The photographs are exact 90-degree rotations of the
-originals; no components, OLED values or labels have been generated or retouched.
+the pictured build.
 Download the [two printable enclosure parts](hardware/enclosure/README.md).
 Assembly needs **one M3×8 mm screw**. Remove the included OLED screen cover
 and reuse its screws to secure the board in the printed case.

@@ -49,15 +49,13 @@ release of any of them.
   Dependency sources and their licenses remain available from those projects;
   versions are pinned in the build configuration where applicable.
 - **Map-interface inspiration:** [adsb.lol](https://adsb.lol/) was a visual and
-  interaction reference requested during development. This UI is a local
+  interaction reference. This UI is a local
   Canvas implementation; no adsb.lol aircraft feed, branding or frontend
   source is bundled.
 - **Offline maps:** [Natural Earth](https://www.naturalearthdata.com/), public
   domain under its [terms](https://www.naturalearthdata.com/about/terms-of-use/).
   Vector sources: [nvkelso/natural-earth-vector](https://github.com/nvkelso/natural-earth-vector).
-  Sources are pinned in `map-sources/sources.json`. Ordinary city names and
-  geographic coordinates in the nationwide map are public cartographic data,
-  not receiver positions or personal tracking records.
+  Sources are pinned in `map-sources/sources.json`.
 - **Optional online map:** © OpenStreetMap contributors. Street tiles are
   fetched only when that map layer is selected. See
   [OpenStreetMap copyright](https://www.openstreetmap.org/copyright).
@@ -68,14 +66,9 @@ release of any of them.
   vendor datasheets are linked from the hardware guide. No manufacturer
   endorsement is implied.
 - **Project photographs and enclosure meshes:** supplied by the project
-  maintainer for this release. Photos are rotated without altering device
-  details. The SAW-filter location and bridge pictures are annotated assembly
+  maintainer. The SAW-filter location and bridge pictures are annotated assembly
   illustrations. Project-supplied assets accompany this GPL-licensed project;
   third-party source materials retain their respective terms.
-
-All web UI screenshots are labeled demonstrations with synthetic aircraft
-and a fictional receiver position. No live receiver dump or private history
-is part of this repository or its firmware release.
 
 ## TheClams MIT notice
 
