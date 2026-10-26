@@ -1,0 +1,14 @@
+.pio/
+.venv/
+node_modules/
+build/
+dist/
+__pycache__/
+sdkconfig
+sdkconfig.old
+sdkconfig.w12_stable
+*.elf
+*.map
+*.log
+*.bin
+.env*
