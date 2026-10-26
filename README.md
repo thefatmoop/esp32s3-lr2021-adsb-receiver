@@ -22,6 +22,39 @@ tested, modified W12; it is not a guaranteed substitute for a purpose-built
 [Hardware and filter modification](docs/HARDWARE.md) ·
 [Flashing and setup](docs/INSTALL.md) · [Build from source](docs/BUILD.md)
 
+## Hardware modification for best reception
+
+**For the better sensitivity and longer range demonstrated by this build, use
+the LF/sub-GHz input after bypassing its U12 SAW filter.** The stock
+902–928 MHz filter attenuates the 1090 MHz aircraft signals. This is a physical
+board modification; firmware settings alone cannot bypass that filter.
+
+The **HF / 2.4 GHz input can also receive 1090 MHz without this filter
+modification**, but it showed **significantly reduced range** compared with
+the modified LF path in this project's tests. Both paths operate outside the
+board front ends' intended bands; no fixed range improvement is promised.
+Select the matching RF input in Receiver settings and move the antenna to
+that connector. The release defaults to the modified LF path.
+
+1. Disconnect power. Locate **U12 — B39921B2625P810**, marking **2J1**, a
+   **1.4 × 1.1 mm** SAW filter, and remove it.
+
+![Remove U12 SAW filter: component location on the W12](docs/images/saw-filter-location.png)
+
+2. Bridge **pads 1 and 4** with a short insulated jumper, soldered only at its
+   ends. In the pictured PCB orientation, **pin 1 is on the right and pin 4
+   is on the left**. Keep the jumper clear of grounded pads **2, 3 and 5**.
+   The tested build uses a direct jumper, with no added series capacitor.
+
+![U12 removed: jumper bridging pads 1 and 4](docs/images/saw-filter-bypass.png)
+
+3. Inspect for shorts, connect the antenna to **LF/sub-GHz**, then power up
+   and check CRC-valid message counts in Receiver diagnostics.
+
+These are assembly illustrations. Verify your board revision and pad layout
+before rework. See the [hardware guide and schematic](docs/HARDWARE.md) for
+the complete details.
+
 ## Web interface
 
 ![Desktop aircraft map with fictional demonstration data](docs/images/webui-desktop.png)
@@ -120,6 +153,16 @@ amplitude is unavailable. Online tiles and optional aircraft lookup need
 internet; local reception, diagnostics and the offline map do not.
 
 ## License and credits
+
+This project builds on work from [ADSBee](https://github.com/PantsForBirds/adsbee),
+[LakeShark](https://github.com/SAMS0N1TE/LakeShark),
+[lr2021-sdr](https://github.com/SAMS0N1TE/lr2021-sdr),
+[TheClams/lr2021](https://github.com/TheClams/lr2021) and
+[lr2021-apps](https://github.com/TheClams/lr2021-apps).
+ADSBee's LR2021 hardware Manchester configuration and receiver workarounds
+were especially useful in making this receiver work. Thank you to their
+authors and contributors. Detailed contributions, reference projects, build
+dependencies, map credits and retained notices are in [THIRD_PARTY.md](THIRD_PARTY.md).
 
 Firmware is distributed under **GPL-3.0-or-later**. See [LICENSE](LICENSE) and
 [THIRD_PARTY.md](THIRD_PARTY.md) for upstream radio work, map sources and other
