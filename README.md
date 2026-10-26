@@ -72,7 +72,7 @@ the complete details.
   checks. Off / Observe / Apply modes; recovered counts and percentages in
   Receiver diagnostics. Clean message rates remain separate. Two-bit recovery
   is not implemented.
-- 4 Hz local data updates and refresh-rate browser animation with a cached
+- 2 Hz local data updates and refresh-rate browser animation with a cached
   basemap. Trails and aircraft share the same display timeline.
 - Three-second position buffer; constant-speed/bearing prediction for up to
   5 seconds below 1,000 ft, 10 seconds at 1,000–5,000 ft, and 30 seconds above
@@ -81,7 +81,7 @@ the complete details.
   Altitude is the reported altitude, not height above terrain. A red dot marks
   more than three seconds without contact. Prediction affects only the display.
 - Aircraft stay in the list for ten minutes and on the map for two minutes
-  after last reception. The receiver keeps short trails in RAM for new browsers.
+  after last reception. Each browser builds its own trails; reloading the page clears them.
 - Dark offline map with USA roads, cities, waterways and state boundaries,
   including Alaska and Hawaii; optional online street tiles.
 - GNSS receiver dot, lock status, last-good-position persistence, and follow
