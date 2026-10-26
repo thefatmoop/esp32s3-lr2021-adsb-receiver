@@ -1,7 +1,8 @@
 # ESP32s3 LR2021 ADSB receiver
 
-A standalone **1090 MHz ADS-B receiver** built around the Meshnology W12's
-ESP32-S3 and LR2021 radio. The LR2021 captures OOK/Manchester traffic; the S3
+A standalone **1090 MHz ADS-B receiver** built around the
+[Meshnology W12's ESP32-S3 and LR2021 radio](https://wiki.meshnology.com/W12/W12_LR2021_Ultra_Long_Range_LoRa_Device/).
+The LR2021 captures OOK/Manchester traffic; the S3
 validates CRCs, decodes aircraft messages, tracks aircraft, and serves the web UI.
 No Raspberry Pi, SDR dongle, cloud aircraft feed, or internet connection is
 required for reception and the bundled US map.
