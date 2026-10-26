@@ -17,6 +17,8 @@
 #include "esp_random.h"
 #include "esp_timer.h"
 #include "esp_system.h"
+#include "esp_heap_caps.h"
+#include "lwip/sockets.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "cJSON.h"
@@ -25,6 +27,8 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 static char token[33];
+// One HTTP task serializes these handlers; reserve its snapshot once.
+static adsb_state web_snapshot;
 extern const uint8_t setup_start[] asm("_binary_setup_html_start"),setup_end[] asm("_binary_setup_html_end");
 extern const uint8_t setup_js_start[] asm("_binary_setup_js_start"),setup_js_end[] asm("_binary_setup_js_end");
 extern const uint8_t ui_start[] asm("_binary_ui_html_start"),ui_end[] asm("_binary_ui_html_end");
@@ -74,11 +78,12 @@ static void tcp_json(cJSON *j){
     cJSON_AddNumberToObject(o,"queued",t.queued);cJSON_AddNumberToObject(o,"bytes",t.sent);
     cJSON_AddNumberToObject(o,"dropped",t.dropped);cJSON_AddNumberToObject(o,"slowClients",t.slow_clients);cJSON_AddNumberToObject(o,"error",t.error);
 }
+static esp_err_t state_finish(httpd_req_t *r,cJSON *metadata,adsb_state *s,const rx_status *st);
 static esp_err_t state_get(httpd_req_t *r){
-    adsb_state *s=malloc(sizeof(*s));if(!s)return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"Out of memory");
+    adsb_state *s=&web_snapshot;
     rx_status st;receiver_snapshot(s,&st);network_info ni;web_network(&ni);
-    cJSON *j=cJSON_CreateObject(),*items=cJSON_AddArrayToObject(j,"aircraft");
-    tcp_json(j);cJSON_AddNumberToObject(j,"trailCapacity",TRAIL_POINTS);cJSON_AddNumberToObject(j,"liveHz",4);
+    cJSON *j=cJSON_CreateObject();
+    tcp_json(j);cJSON_AddNumberToObject(j,"trailCapacity",0);cJSON_AddNumberToObject(j,"liveHz",2);
     cJSON_AddStringToObject(j,"token",token);cJSON_AddNumberToObject(j,"uptime",st.now/1000.0);
     cJSON_AddNumberToObject(j,"listSeconds",ADSB_LIST_MS/1000);cJSON_AddNumberToObject(j,"mapSeconds",ADSB_MAP_MS/1000);
     cJSON_AddBoolToObject(j,"selftest",st.selftest);cJSON_AddNumberToObject(j,"error",st.error);
@@ -110,7 +115,11 @@ static esp_err_t state_get(httpd_req_t *r){
     cJSON *offsets=cJSON_AddArrayToObject(j,"captureOffsets");for(unsigned i=0;i<17;i++)cJSON_AddItemToArray(offsets,cJSON_CreateNumber(s->capture_offsets[i]));
     number(j,"noiseDbm",st.radio.noise_dbm,st.config.threshold==101);cJSON_AddNumberToObject(j,"thresholdRaw",st.radio.threshold_raw);
     cJSON_AddNumberToObject(j,"recoveries",st.radio.recoveries);cJSON_AddNumberToObject(j,"polls",st.radio.polls);
-    cJSON_AddNumberToObject(j,"heap",esp_get_free_heap_size());cJSON_AddStringToObject(j,"ip",ni.ip);
+    cJSON_AddNumberToObject(j,"heap",esp_get_free_heap_size());
+    cJSON_AddNumberToObject(j,"heapMinimum",esp_get_minimum_free_heap_size());
+    cJSON_AddNumberToObject(j,"heapLargest",heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    cJSON_AddNumberToObject(j,"resetReason",esp_reset_reason());
+    cJSON_AddNumberToObject(j,"wifiDisconnects",ni.disconnects);cJSON_AddNumberToObject(j,"wifiLastReason",ni.last_reason);cJSON_AddStringToObject(j,"ip",ni.ip);
     cJSON_AddNumberToObject(j,"wifiRssi",ni.rssi);cJSON_AddNumberToObject(j,"apRebootSeconds",ni.reboot_seconds);cJSON_AddStringToObject(j,"wifiMessage",ni.message);cJSON_AddBoolToObject(j,"wifiTesting",ni.testing);
     cJSON_AddStringToObject(j,"ssid",ni.ssid);cJSON_AddBoolToObject(j,"connected",ni.connected);cJSON_AddBoolToObject(j,"ap",ni.ap);
     gnss_status gps;gnss_snapshot(&gps);cJSON *g=cJSON_AddObjectToObject(j,"gnss");
@@ -122,22 +131,7 @@ static esp_err_t state_get(httpd_req_t *r){
     number(g,"sentenceAge",st.now>=gps.last_sentence?(st.now-gps.last_sentence)/1000.0:0,gps.sentences>0);
     number(g,"hdop",gps.hdop,true);cJSON_AddNumberToObject(g,"satellites",gps.satellites);cJSON_AddNumberToObject(g,"quality",gps.quality);
     cJSON_AddNumberToObject(g,"bytes",gps.bytes);cJSON_AddNumberToObject(g,"sentences",gps.sentences);cJSON_AddNumberToObject(g,"badChecksum",gps.bad_checksum);
-    for(int i=0;i<ADSB_MAX_AIRCRAFT;i++){
-        aircraft *a=&s->aircraft[i];if(!a->icao||st.now-a->seen>ADSB_LIST_MS)continue;
-        cJSON *v=cJSON_CreateObject();cJSON_AddItemToArray(items,v);char id[7];snprintf(id,sizeof(id),"%06lX",(unsigned long)a->icao);
-        cJSON_AddStringToObject(v,"address",id);cJSON_AddBoolToObject(v,"nonIcao",a->nonicao);
-        cJSON_AddStringToObject(v,"callsign",a->callsign);
-        cJSON_AddNumberToObject(v,"messages",a->messages);cJSON_AddNumberToObject(v,"age",(st.now-a->seen)/1000.0);
-        cJSON_AddNumberToObject(v,"correctedMessages",a->corrected_messages);cJSON_AddNumberToObject(v,"cleanMessages",a->clean_messages);
-        // Send last known coordinates to every client; map visibility uses last reception age.
-        bool pos=a->position_valid;
-        number(v,"lat",a->latitude,pos);number(v,"lon",a->longitude,pos);number(v,"positionAge",(st.now-a->position_at)/1000.0,pos);
-        number(v,"altitude",a->altitude,a->altitude_valid&&st.now-a->altitude_at<=30000);
-        bool vel=st.now-a->velocity_at<=30000;
-        number(v,"speed",a->speed,a->velocity_valid&&vel);number(v,"track",a->track,a->velocity_valid&&vel);
-        number(v,"verticalRate",a->vertical_rate,a->vertical_valid&&vel);number(v,"rssi",a->rssi,true);
-    }
-    free(s);return json_send(r,j);
+    return state_finish(r,j,s,&st);
 }
 static cJSON *body(httpd_req_t *r){
     char auth[40];if(httpd_req_get_hdr_value_str(r,"X-ADSB-Token",auth,sizeof(auth))!=ESP_OK||strcmp(auth,token)){httpd_resp_send_err(r,HTTPD_403_FORBIDDEN,"Reload the page");return NULL;}
@@ -199,28 +193,50 @@ static void write_json(json_writer *w,const char *format,...){
         if(n<0||(size_t)n>=sizeof(w->data)){w->error=ESP_FAIL;return;}
     }w->used+=n;
 }
+// The server runs handlers serially. Stream aircraft in bounded chunks instead
+// of constructing a cJSON tree and a second full-sized response in the heap.
+static void write_aircraft(json_writer *w,const adsb_state *s,const rx_status *st){
+    bool first=true;
+    for(int i=0;i<ADSB_MAX_AIRCRAFT&&!w->error;i++){
+        const aircraft *a=&s->aircraft[i];if(!a->icao||st->now-a->seen>ADSB_LIST_MS)continue;
+        // Decoder callsigns are strictly A-Z/0-9/space, requiring no escaping.
+        write_json(w,"%s{\"address\":\"%06lX\",\"nonIcao\":%s,\"callsign\":\"%s\",\"messages\":%lu,\"age\":%.3f",first?"":",",(unsigned long)a->icao,a->nonicao?"true":"false",a->callsign,(unsigned long)a->messages,(st->now-a->seen)/1000.0);first=false;
+        write_json(w,",\"cleanMessages\":%lu,\"correctedMessages\":%lu",(unsigned long)a->clean_messages,(unsigned long)a->corrected_messages);
+        if(a->position_valid)write_json(w,",\"lat\":%.6f,\"lon\":%.6f,\"positionAge\":%.3f",a->latitude,a->longitude,(st->now-a->position_at)/1000.0);
+        else write_json(w,",\"lat\":null,\"lon\":null,\"positionAge\":null");
+        if(a->altitude_valid&&st->now-a->altitude_at<=30000)write_json(w,",\"altitude\":%d",a->altitude);else write_json(w,",\"altitude\":null");
+        if(a->velocity_valid&&st->now-a->velocity_at<=30000)write_json(w,",\"speed\":%.1f,\"track\":%.1f",a->speed,a->track);else write_json(w,",\"speed\":null,\"track\":null");
+        if(a->vertical_valid&&st->now-a->velocity_at<=30000)write_json(w,",\"verticalRate\":%d",a->vertical_rate);else write_json(w,",\"verticalRate\":null");
+        if(isfinite(a->rssi))write_json(w,",\"rssi\":%.1f}",a->rssi);else write_json(w,",\"rssi\":null}");
+    }
+}
+static esp_err_t finish_aircraft(json_writer *w){
+    write_json(w,"]}");
+    if(!w->error)w->error=httpd_resp_send_chunk(w->r,w->data,w->used);
+    if(!w->error)w->error=httpd_resp_send_chunk(w->r,NULL,0);
+    return w->error;
+}
+static esp_err_t state_finish(httpd_req_t *r,cJSON *metadata,adsb_state *s,const rx_status *st){
+    char *header=cJSON_PrintUnformatted(metadata);cJSON_Delete(metadata);
+    if(!header){return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"Out of memory");}
+    size_t n=strlen(header);
+    if(n<2||header[n-1]!='}'){cJSON_free(header);return ESP_FAIL;}
+    httpd_resp_set_type(r,"application/json");httpd_resp_set_hdr(r,"Cache-Control","no-store");
+    json_writer w={.r=r};w.error=httpd_resp_send_chunk(r,header,n-1);cJSON_free(header);
+    write_json(&w,",\"aircraft\":[");write_aircraft(&w,s,st);
+    return finish_aircraft(&w);
+}
 static esp_err_t live_get(httpd_req_t *r){
-    adsb_state *s=malloc(sizeof(*s));if(!s)return httpd_resp_send_err(r,HTTPD_500_INTERNAL_SERVER_ERROR,"Out of memory");
+    adsb_state *s=&web_snapshot;
     rx_status st;receiver_snapshot(s,&st);httpd_resp_set_type(r,"application/json");httpd_resp_set_hdr(r,"Cache-Control","no-store");
     json_writer w={.r=r};
     write_json(&w,"{\"uptime\":%.3f,\"valid\":%lu,\"candidates\":%lu,\"error\":%d,\"overflows\":%lu,\"radioErrors\":%lu,\"heap\":%lu,\"lastValidAge\":",st.now/1000.0,(unsigned long)s->valid,(unsigned long)s->candidates,st.error,(unsigned long)st.radio.overflows,(unsigned long)st.radio.errors,(unsigned long)esp_get_free_heap_size());
     if(s->valid)write_json(&w,"%.3f",(st.now-s->last_valid)/1000.0);else write_json(&w,"null");
     write_json(&w,",\"correctionMode\":%u,\"corrected\":%lu,\"repairCandidates\":%lu,\"repairRejected\":%lu,\"repairEligible\":%lu,\"repairConfirmed\":%lu",s->correction_mode,(unsigned long)s->corrected,(unsigned long)s->repair_candidates,(unsigned long)s->repair_rejected,(unsigned long)s->repair_eligible,(unsigned long)s->repair_confirmed);
-    write_json(&w,",\"aircraft\":[");bool first=true;
-    for(int i=0;i<ADSB_MAX_AIRCRAFT&&!w.error;i++){
-        aircraft *a=&s->aircraft[i];if(!a->icao||st.now-a->seen>ADSB_LIST_MS)continue;
-        // Decoder callsigns are strictly A-Z/0-9/space, requiring no escaping.
-        write_json(&w,"%s{\"address\":\"%06lX\",\"nonIcao\":%s,\"callsign\":\"%s\",\"messages\":%lu,\"age\":%.3f",first?"":",",(unsigned long)a->icao,a->nonicao?"true":"false",a->callsign,(unsigned long)a->messages,(st.now-a->seen)/1000.0);first=false;
-        write_json(&w,",\"cleanMessages\":%lu,\"correctedMessages\":%lu",(unsigned long)a->clean_messages,(unsigned long)a->corrected_messages);
-        if(a->position_valid)write_json(&w,",\"lat\":%.6f,\"lon\":%.6f,\"positionAge\":%.3f",a->latitude,a->longitude,(st.now-a->position_at)/1000.0);
-        else write_json(&w,",\"lat\":null,\"lon\":null,\"positionAge\":null");
-        if(a->altitude_valid&&st.now-a->altitude_at<=30000)write_json(&w,",\"altitude\":%d",a->altitude);else write_json(&w,",\"altitude\":null");
-        if(a->velocity_valid&&st.now-a->velocity_at<=30000)write_json(&w,",\"speed\":%.1f,\"track\":%.1f",a->speed,a->track);else write_json(&w,",\"speed\":null,\"track\":null");
-        if(a->vertical_valid&&st.now-a->velocity_at<=30000)write_json(&w,",\"verticalRate\":%d",a->vertical_rate);else write_json(&w,",\"verticalRate\":null");
-        if(isfinite(a->rssi))write_json(&w,",\"rssi\":%.1f}",a->rssi);else write_json(&w,",\"rssi\":null}");
-    }
-    free(s);write_json(&w,"]}");if(!w.error)w.error=httpd_resp_send_chunk(r,w.data,w.used);if(!w.error)w.error=httpd_resp_send_chunk(r,NULL,0);return w.error;
+    write_json(&w,",\"aircraft\":[");write_aircraft(&w,s,&st);
+    return finish_aircraft(&w);
 }
+
 static esp_err_t trails_get(httpd_req_t *r){
     char query[64],address[8],non[3];if(httpd_req_get_url_query_str(r,query,sizeof(query))!=ESP_OK||httpd_query_key_value(query,"address",address,sizeof(address))!=ESP_OK||strlen(address)!=6)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"Six-digit address required");
     char *end;uint32_t icao=strtoul(address,&end,16);if(*end||!icao)return httpd_resp_send_err(r,HTTPD_400_BAD_REQUEST,"Invalid address");
@@ -231,11 +247,16 @@ static esp_err_t trails_get(httpd_req_t *r){
         cJSON *a=cJSON_CreateArray();cJSON_AddItemToArray(points,a);cJSON_AddItemToArray(a,cJSON_CreateNumber(p->lat/1e6));cJSON_AddItemToArray(a,cJSON_CreateNumber(p->lon/1e6));cJSON_AddItemToArray(a,p->alt==INT32_MIN?cJSON_CreateNull():cJSON_CreateNumber(p->alt));cJSON_AddItemToArray(a,cJSON_CreateNumber(age/1000.0));
     }return json_send(r,j);
 }
+static esp_err_t connection_open(httpd_handle_t server,int fd){
+    (void)server;int yes=1;
+    return setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&yes,sizeof(yes))==0?ESP_OK:ESP_FAIL;
+}
 int web_start(void){
     esp_err_t e=network_start();if(e)return e;
     if(tcp_stream_start())return ESP_ERR_NO_MEM;
     for(int i=0;i<4;i++)snprintf(token+8*i,9,"%08lx",(unsigned long)esp_random());
-    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=16;cfg.max_open_sockets=4;cfg.lru_purge_enable=true;cfg.recv_wait_timeout=2;cfg.send_wait_timeout=1;
+    httpd_config_t cfg=HTTPD_DEFAULT_CONFIG();cfg.stack_size=8192;cfg.max_uri_handlers=16;cfg.max_open_sockets=8;cfg.lru_purge_enable=true;cfg.recv_wait_timeout=2;cfg.send_wait_timeout=3;
+    cfg.open_fn=connection_open;cfg.keep_alive_enable=true;cfg.keep_alive_idle=5;cfg.keep_alive_interval=3;cfg.keep_alive_count=3;
     httpd_handle_t server;if((e=httpd_start(&server,&cfg)))return e;
     const char *paths[]={"/","/ui.js","/style.css","/world.json","/api/state","/api/radio","/api/wifi"};
     for(int i=0;i<7;i++){httpd_uri_t u={.uri=paths[i],.method=i>=5?HTTP_POST:HTTP_GET,.handler=i<4?asset:i==4?state_get:i==5?radio_post:wifi_post};if((e=httpd_register_uri_handler(server,&u)))return e;}

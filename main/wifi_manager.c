@@ -29,6 +29,7 @@ void web_network(network_info *out){
 static void message(const char *text,int error){xSemaphoreTake(net_lock,portMAX_DELAY);snprintf(net.message,sizeof(net.message),"%s",text);net.error=error;xSemaphoreGive(net_lock);}
 static void event(void *arg,esp_event_base_t base,int32_t id,void *data){
  (void)arg;xSemaphoreTake(net_lock,portMAX_DELAY);
+ if(base==WIFI_EVENT&&id==WIFI_EVENT_STA_DISCONNECTED){wifi_event_sta_disconnected_t *e=data;net.disconnects++;net.last_reason=e->reason;}
  if(base==IP_EVENT&&id==IP_EVENT_STA_GOT_IP){ip_event_got_ip_t *e=data;net.connected=true;snprintf(net.ip,sizeof(net.ip),IPSTR,IP2STR(&e->ip_info.ip));}
  if((base==WIFI_EVENT&&id==WIFI_EVENT_STA_DISCONNECTED)||(base==IP_EVENT&&id==IP_EVENT_STA_LOST_IP)){net.connected=false;net.ip[0]=0;net.rssi=0;}
  xSemaphoreGive(net_lock);
@@ -109,7 +110,11 @@ int network_start(void){
  int e=nvs_flash_init();if(e)return e;
  if((e=esp_netif_init()))return e;if((e=esp_event_loop_create_default()))return e;
  if(!esp_netif_create_default_wifi_sta()||!esp_netif_create_default_wifi_ap())return ESP_ERR_NO_MEM;
- wifi_init_config_t cfg=WIFI_INIT_CONFIG_DEFAULT();if((e=esp_wifi_init(&cfg)))return e;
+ wifi_init_config_t cfg=WIFI_INIT_CONFIG_DEFAULT();
+ // Bound transient Wi-Fi copies during map downloads and multiple clients.
+ // RX stays above the default ten static buffers; this is not a bulk router.
+ cfg.dynamic_rx_buf_num=16;cfg.dynamic_tx_buf_num=16;
+ if((e=esp_wifi_init(&cfg)))return e;
  if((e=esp_wifi_set_storage(WIFI_STORAGE_RAM)))return e;
  if((e=esp_event_handler_register(WIFI_EVENT,ESP_EVENT_ANY_ID,event,NULL)))return e;
  if((e=esp_event_handler_register(IP_EVENT,ESP_EVENT_ANY_ID,event,NULL)))return e;

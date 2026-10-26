@@ -1,11 +1,12 @@
 'use strict';
-// A small 4 Hz position feed runs separately from slower receiver diagnostics.
+// A small 2 Hz position feed runs separately from slower receiver diagnostics.
 // Play received fixes on one continuous receiver-time timeline. Restarting a
 // tween per poll makes steady flight accelerate, stop, and accelerate again.
 const motion=new Map(),trailLoads=new Map(),aircraftInfo=new Map();
 const MOTION_DELAY=3, MOTION_MAX_GAP=10, MOTION_COAST=30;
 let motionClock=null;
 function motionTime(now=performance.now()){return motionClock?motionClock.uptime+(now-motionClock.local)/1000-MOTION_DELAY:0;}
+let liveFailures=0;
 let liveBusy=false,liveTimer=null,liveSupported=true,trailBusy=false,infoAbort=null,infoSelection='';
 let backgroundCanvas=null,backgroundKey='',backgroundStatus={ready:0,failed:0},backgroundVersion=0;
 let backgroundView=null;
@@ -104,14 +105,14 @@ function animateMap(now){
 requestAnimationFrame(animateMap);
 async function livePoll(){
  if(liveBusy)return;const start=Date.now();liveBusy=true;
- try{if(state&&liveSupported&&!document.hidden){const r=await fetch('/api/live',{cache:'no-store',signal:AbortSignal.timeout(2000)});if(r.status===404){liveSupported=false;return;}if(!r.ok)throw Error();const s=await r.json();
+ try{if(state&&liveSupported&&!document.hidden&&!polling&&!trailBusy){const r=await fetch('/api/live',{cache:'no-store',signal:AbortSignal.timeout(3500)});if(r.status===404){liveSupported=false;return;}if(!r.ok)throw Error();const s=await r.json();
   // Full diagnostics and fast polls may finish out of order. Only apply newer snapshots.
-  if(s.uptime>=state.uptime||s.uptime+5<state.uptime)render({...state,...s});setText('updateStatus','4 Hz live · 3 s buffer · prediction 5/10/30 s by altitude');
- }}catch(e){setText('updateStatus','Live feed reconnecting');}finally{liveBusy=false;liveTimer=setTimeout(livePoll,document.hidden?4000:Math.max(20,250-(Date.now()-start)));}
+  if(s.uptime>=state.uptime||s.uptime+5<state.uptime)render({...state,...s});liveFailures=0;setText('updateStatus','2 Hz live · 3 s buffer · prediction 5/10/30 s by altitude');
+ }}catch(e){liveFailures=Math.min(liveFailures+1,4);if(Date.now()-lastFetch>3000)setText('updateStatus','Live feed reconnecting');checkConnection();}finally{liveBusy=false;liveTimer=setTimeout(livePoll,document.hidden?4000:Math.max(100,500*Math.max(1,liveFailures)-(Date.now()-start)));}
 }
 livePoll();
 async function loadTrail(){
- if(trailBusy||document.hidden||!state)return;const now=Date.now();
+ if(trailBusy||polling||liveBusy||document.hidden||!state||state.trailCapacity===0)return;const now=Date.now();
  const a=observed().find(a=>hasPosition(a)&&(!trailLoads.has(key(a))||now-trailLoads.get(key(a))>60000));if(!a)return;
  const id=key(a);trailLoads.set(id,now);trailBusy=true;const boot=state.uptime;
  try{const r=await fetch('/api/trails?address='+a.address+'&nonIcao='+(a.nonIcao?1:0),{cache:'no-store',signal:AbortSignal.timeout(2500)});if(!r.ok)return;const data=await r.json();if(!state||state.uptime<boot)return;

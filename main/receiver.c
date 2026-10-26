@@ -145,7 +145,10 @@ static void update_oled(void){
     }
 }
 static void status(void){
-    static adsb_state s;rx_status st;receiver_snapshot(&s,&st);network_info net;web_network(&net);char b[620];
+    struct {uint32_t candidates,bad_pairs,bad_crc,valid;} s;rx_status st;
+    xSemaphoreTake(lock,portMAX_DELAY);st=current;
+    s.candidates=state.candidates;s.bad_pairs=state.bad_pairs;s.bad_crc=state.bad_crc;s.valid=state.valid;
+    xSemaphoreGive(lock);network_info net;web_network(&net);char b[620];
     snprintf(b,sizeof(b),"STATUS init=%d selftest=%d gain=%u boost=%u threshold=%d assisted=%d hf=%d candidates=%lu pairs_bad=%lu crc_bad=%lu valid=%lu polls=%lu overflow=%lu errors=%lu recoveries=%lu stat=%04X chip=%04X ip=%s ap=%d\n",
         st.error,st.selftest,st.config.gain,st.config.boost,st.config.threshold,st.config.assisted,st.config.hf,
         (unsigned long)s.candidates,(unsigned long)s.bad_pairs,(unsigned long)s.bad_crc,(unsigned long)s.valid,
