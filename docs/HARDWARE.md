@@ -1,6 +1,6 @@
 # Hardware assembly and LF filter bypass
 
-Board purchase link supplied for this build: [W12 ESP32 LoRa Development Board, LR2021 Chip Upgraded ESP32-S3 on Amazon](https://www.amazon.com/dp/B0H74Y877D).
+Board: [W12 ESP32 LoRa Development Board, LR2021 Chip Upgraded ESP32-S3 on Amazon](https://www.amazon.com/dp/B0H74Y877D).
 
 Use the **Meshnology W12 ESP32-S3 + LR2021** board. Check the part numbers,
 connector layout and revision before following the pictures. The enclosure
@@ -65,7 +65,7 @@ The **GNSS module and internal 2.4 GHz antenna are hot-glued into place** in
 this build. Secure the coax and module leads so they do not pull on connectors;
 keep antenna elements and GNSS reception surfaces clear of metal hardware.
 USB enters at the left and the external antenna bulkhead is at the right in
-these rotated photos.
+these photos.
 
 Printable parts: [lid.stl](../hardware/enclosure/lid.stl) and
 [back.stl](../hardware/enclosure/back.stl). Assembly requires **one M3×8 mm

@@ -10,15 +10,12 @@ pio run -e w12_stable -t upload --upload-port PORT
 
 Run commands from the repository root. The first build downloads the pinned
 pioarduino ESP32 platform and ESP-IDF dependencies. Subsequent builds can use
-the downloaded toolchain. `platformio.ini` has no local absolute paths or fixed
-serial port. All application assets and the compressed offline map are embedded.
+the downloaded toolchain. All application assets and the compressed offline map
+are embedded.
 
 The tested build pins platform `55.03.312-1`. The 16 MB board uses a 4 MB app
 partition at `0x10000`. PlatformIO may report a larger board-level limit;
 the partition table is authoritative. Outputs are under `.pio/build/w12_stable/`.
-The release distributes factory and app binaries, not a dump of device flash
-or NVS. `CONFIG_COMPILER_HIDE_PATHS_MACROS` avoids embedding local source paths
-in assertion strings.
 
 ## Native tests
 
@@ -50,8 +47,6 @@ npm install
 npx playwright install chromium
 npm run screenshots
 ```
-
-No real GNSS position, Wi-Fi credentials or aircraft captures are inputs.
 
 ## Offline map provenance
 
